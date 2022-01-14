@@ -93,7 +93,7 @@ func LogCommandEnd(id string) error {
 			_, err = currentLogFile.Write(auditLogs)
 			if err != nil {
 				return fmt.Errorf("failed to write to current log file : %v", err)
-			} 
+			}
 			return nil
 		}
 	}
