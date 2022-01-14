@@ -20,7 +20,6 @@ import (
 	"os"
 	"os/user"
 	"testing"
-	"time"
 
 	"github.com/spf13/viper"
 	"k8s.io/minikube/pkg/minikube/config"
@@ -170,11 +169,39 @@ func TestAudit(t *testing.T) {
 	})
 
 	// Check if logging with limited args causes a panic
-	t.Run("Log", func(t *testing.T) {
+	t.Run("LogCommandStart", func(t *testing.T) {
 		oldArgs := os.Args
 		defer func() { os.Args = oldArgs }()
 		os.Args = []string{"minikube"}
 
-		Log(time.Now())
+		_, err := LogCommandStart()
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("LogCommandEnd", func(t *testing.T) {
+		oldArgs := os.Args
+		defer func() { os.Args = oldArgs }()
+		os.Args = []string{"minikube"}
+
+		auditID, _ := LogCommandStart()
+		err := LogCommandEnd(auditID)
+
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("LogCommandEnd", func(t *testing.T) {
+		oldArgs := os.Args
+		defer func() { os.Args = oldArgs }()
+		os.Args = []string{"minikube"}
+
+		err := LogCommandEnd("non-existing-id")
+
+		if err == nil {
+			t.Fatal("function LogCommandEnd should return an error when a non-existing id is passed in it as an argument")
+		}
 	})
 }

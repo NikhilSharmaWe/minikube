@@ -17,14 +17,17 @@ limitations under the License.
 package audit
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"os/user"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/spf13/viper"
-	"k8s.io/klog/v2"
 	"k8s.io/minikube/pkg/minikube/config"
+	"k8s.io/minikube/pkg/minikube/constants"
 	"k8s.io/minikube/pkg/version"
 )
 
@@ -51,14 +54,50 @@ func args() string {
 }
 
 // Log details about the executed command.
-func Log(startTime time.Time) {
+func LogCommandStart() (string, error) {
 	if len(os.Args) < 2 || !shouldLog() {
-		return
+		return "", nil
 	}
-	r := newRow(os.Args[1], args(), userName(), version.GetVersion(), startTime, time.Now())
+	id := uuid.New().String()
+	r := newRow(os.Args[1], args(), userName(), version.GetVersion(), time.Now(), id)
 	if err := appendToLog(r); err != nil {
-		klog.Warning(err)
+		return "", err
 	}
+	return r.id, nil
+}
+
+func LogCommandEnd(id string) error {
+	if currentLogFile == nil {
+		if err := setLogFile(); err != nil {
+			return fmt.Errorf("failed to set the log file: %v", err)
+		}
+	}
+	var auditLogs []byte
+	_, err := currentLogFile.Read(auditLogs)
+	if err != nil {
+		return fmt.Errorf("failed to read from current log file : %v", err)
+	}
+	var rowSlice []row
+	err = json.Unmarshal(auditLogs, &rowSlice)
+	if err != nil {
+		return fmt.Errorf("failed to parse JSON-encoded logs : %v", err)
+	}
+	for _, v := range rowSlice {
+		if v.id == id {
+			v.endTime = time.Now().Format(constants.TimeFormat)
+			rowSlice = append(rowSlice, v)
+			auditLogs, err := json.Marshal(rowSlice)
+			if err != nil {
+				return fmt.Errorf("failed to return JSON-encoding of slice of type row : %v", err)
+			}
+			_, err = currentLogFile.Write(auditLogs)
+			if err != nil {
+				return fmt.Errorf("failed to write to current log file : %v", err)
+			} 
+			return nil
+		}
+	}
+	return fmt.Errorf("failed to find a log row with id equals to %v", id)
 }
 
 // shouldLog returns if the command should be logged.
